@@ -1,0 +1,7 @@
+.vscode
+.DS_Store
+*.pyc
+__pycache__
+*.t7
+*.pkl
+*.pth

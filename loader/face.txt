@@ -1,0 +1,11 @@
+dark_skin
+shiny_skin
+pale_skin
+nose_blush
+red_bow
+pink_bow
+black_bow
+black_bow
+blue_bow
+yellow_bow
+white_bow
