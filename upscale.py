@@ -3,7 +3,7 @@ import os, json, warnings, copy, glob
 from collections import OrderedDict
 from contextlib import contextmanager
 from math import sqrt, exp, log
-
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
@@ -134,11 +134,12 @@ def upscale(img, gpu):
                 last_feature_filters=48,
                 reconstruction_filters=128,
                 up_sampler_filters=32)
+    
+    model.eval()
 
     map_location = "cuda:0" if gpu else "cpu"
-    state_dict = torch.load(model_path, map_location=map_location)
-    print(type(model.total_feature_channels))
-    model.load_state_dict(state_dict)
+    cp = torch.load(model_path, map_location=map_location).state_dict()
+    model.load_state_dict(cp)
 
     img = img.convert("RGB")
     img_up = img.resize((2 * img.size[0], 2 * img.size[1]), Image.BILINEAR)
@@ -150,13 +151,12 @@ def upscale(img, gpu):
         img = img.cuda()
         img_up = img_up.cuda()
 
-    out = model((img, img_up))
-    out = out.cpu()
-
-    print(out.shape)
+    with torch.no_grad():
+        out = model((img, img_up))
+        out = out.cpu()[0] * 255
 
     if gpu:
         model = None
         torch.cuda.empty_cache()
-
-    return Image.fromarray(out)
+    out = out.permute(1, 2, 0)
+    return Image.fromarray(out.numpy().astype(np.uint8))
