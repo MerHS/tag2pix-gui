@@ -143,10 +143,10 @@ def load_weight(model, pretrained_dict):
     model_dict.update(pretrained_dict) 
     model.load_state_dict(pretrained_dict)
 
-def se_resnext_half(dump_path, **kwargs):
+def se_resnext_half(dump_path, map_location=None, **kwargs):
     model = SEResNeXt_Half(BottleneckX_Origin, [3, 4, 6, 3], **kwargs)
     with open(dump_path, 'rb') as f:
-        network_weight = torch.load(f)['weight']
+        network_weight = torch.load(f, map_location=map_location)['weight']
         load_weight(model, network_weight)
         model.remove_half()
 

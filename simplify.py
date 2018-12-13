@@ -1,3 +1,5 @@
+# original code: https://github.com/bobbens/sketch_simplification
+import os
 import torch
 from torchvision import transforms
 from torchvision.utils import save_image
@@ -7,13 +9,7 @@ from main import get_resized_img
 import numpy as np
 from PIL import Image, ImageOps
 
-
-model_path = None
-
-def set_model_path(path):
-   global model_path
-   model_path = path
-   print(f'set_path {path}')
+model_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'model_gan.t7')
 
 def simplify_sketch(pil_img, max_pixel=768, partition=256, padding=16, gpu=False):
    cache = load_lua(model_path, long_size=8)
@@ -33,7 +29,7 @@ def simplify_sketch(pil_img, max_pixel=768, partition=256, padding=16, gpu=False
    ph    = 8-(h%8) if h%8!=0 else 0
    data  = ((transforms.ToTensor()(data) - immean) / imstd).unsqueeze(0)
    if pw != 0 or ph != 0:
-      data = F.pad(data, (0, pw, 0, ph)).data
+      data = F.pad(data, (0, pw, 0, ph), mode='reflect').data
    
    simp_arr = _simplify_part(data, cache, gpu)
 

@@ -2,28 +2,13 @@ import argparse, os, traceback
 import tkinter as tk
 import torch
 import simplify
-from PIL import ImageTk, Image
+import colorize
+from upscale import upscale
+from PIL import ImageTk, Image, ImageOps
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 # from tag2pix import tag2pix
 
-TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag_dump_306.pkl')
-NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag2pix_G.pkl')
-PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pretrain_skt.pth')
-SIMPLIFY_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'model_gan.t7')
 CUDA_AVAILABLE = torch.cuda.device_count() > 0
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--simplify_dump', default=SIMPLIFY_PATH)
-    parser.add_argument('--pretrain_dump', default=PRETRAIN_PATH)
-    parser.add_argument('--tag_dump', default=TAG_FILE_PATH)
-    parser.add_argument('--main_dump', default=NETWORK_FILE_PATH)
-
-    parser.add_argument('--color_space', type=str, default='rgb', choices=['lab', 'rgb', 'hsv'],
-                        help='Learning color space')
-    parser.add_argument('--layers', type=int, nargs='+', default=[12,8,5,5])
-
-    return parser.parse_args()
 
 def get_resized_img(pil_img, max_pixel=512, resample=Image.ANTIALIAS):
     size = pil_img.size
@@ -36,7 +21,7 @@ def get_resized_img(pil_img, max_pixel=512, resample=Image.ANTIALIAS):
 
 def get_tagset():
     tag_list = []
-    tag_file_list = ['eyes', 'hair', 'face', 'fashion']
+    tag_file_list = ['tags']
     for fl in tag_file_list:
         with open(f'loader/{fl}.txt', 'r') as f:
             for line in f:
@@ -46,6 +31,7 @@ def get_tagset():
 class ChoiceBox(tk.Frame):
     def __init__(self, list_items, *args, **kwargs):
         tk.Frame.__init__(self, *args, **kwargs)
+        self.list_items = list_items
         self.list_var = tk.StringVar()
         self.list_var.set(' '.join(list_items))
         self.scroll = tk.Scrollbar(self)
@@ -59,11 +45,12 @@ class ChoiceBox(tk.Frame):
         self.scroll.config(command=self.list_box.yview)
 
     def get_selected(self):
-        return list(self.list_box.curselection())
+        return list(map(lambda i: self.list_items[i], 
+            self.list_box.curselection()))
 
 
 class App(object):
-    def __init__(self, args):
+    def __init__(self):
         self.top = tk.Tk()
         self.top.title = 'tag2pix'
         self.img_panel = tk.Frame(self.top, height=512, width=512)
@@ -82,10 +69,10 @@ class App(object):
 
         self.btn_load = tk.Button(self.top, text='Load Sketch', command=self.load_file)
         self.btn_simplify = tk.Button(self.top, text='Simplify Sketch', command=self.simplify_sketch)
-        self.btn_colorize = tk.Button(self.top, text='Colorize', command=self.colorize)
-        self.btn_upscale = tk.Button(self.top, text='Upscale', command=self.upscale)
+        self.btn_colorize = tk.Button(self.top, text='Colorize', command=self.colorize_sketch)
+        self.btn_upscale = tk.Button(self.top, text='Upscale', command=self.upscale_img)
         self.btn_save = tk.Button(self.top, text='Save', command=self.save_file)
-        self.cb_gpu = tk.Checkbutton(self.top, text='GPU | Simplify Size: ', variable=self.use_gpu)
+        self.cb_gpu = tk.Checkbutton(self.top, text='GPU | Simpify Size: ', variable=self.use_gpu)
         self.cb_gpu.var = self.use_gpu
         self.drop_simpl_size = tk.OptionMenu(self.top, self.simpl_var, *self.simplify_sizes)
 
@@ -106,8 +93,10 @@ class App(object):
         self.choice_box.grid(row=2, column=5, columnspan=2, sticky="nse")
 
         self.simpl_var.set(768)
+
         if CUDA_AVAILABLE:
             self.use_gpu.set(True)
+            torch.backends.cudnn.benchmark = True
             self.print_status('Found CUDA GPU, run in gpu mode')
         else:
             self.use_gpu.set(False)
@@ -115,7 +104,7 @@ class App(object):
             self.print_status('Failed to find CUDA GPU, run in cpu mode')
 
         self.print_status('Please Load Sketch File')
-        self.print_status('This version use CPU to simplify sketch.')
+        self.print_status('This version uses CPU to simplify sketch.')
 
     def print_log(self, status):
         self.stat_text.configure(state='normal')
@@ -157,7 +146,7 @@ class App(object):
                 if file_name[-4:].lower() not in ['.png', '.jpg', '.jpeg', '.gif']:
                     file_name = file_name + '.png'
                 if os.path.exists(file_name):
-                    pass
+                    pass # TODO
                 self.current_img.save(file_name)
                 self.print_status(f'Image saved to "{file_name}"')
             except Exception as e:
@@ -171,29 +160,61 @@ class App(object):
             self.print_error('Please Load Sketch Image')
             return
 
-        self.print_status('Simplifying Sketch... (Recommended Simplify Size: 768px)')
+        self.print_status('Simplifying Sketch... (Recommended Generated Size: 768px)')
         
         try:
             self.simpl_img = simplify.simplify_sketch(
                 self.sketch_img, self.simpl_var.get(), gpu=False) # self.use_gpu.get())
             self.set_img(self.simpl_img)
             w, h = self.simpl_img.size
-            self.print_status(f'Finished: ({w}x{h})')
+            self.print_status(f'Finished Simplifying: ({w}x{h})')
         except:
             traceback.print_exc()
-            self.print_error('Failed to simplify sketch. This may be your GPU Size is smaller than network size. Retry with lower Partition Size')
+            self.print_error('Failed to simplify sketch. See stack trace.')
+            # self.print_error('Failed to simplify sketch. This may be your GPU VRAM size is smaller than network size. Retry with lower Partition Size')
 
-    def colorize(self):
-        pass
+    def colorize_sketch(self):
+        if self.sketch_img is None:
+            self.print_error('Please Load Sketch Image')
+            return
+        gpu = self.use_gpu.get()
+        enable_str = 'enabled' if gpu else 'disabled'
+        self.print_status(f'Colorize with old version / GPU {enable_str}')
 
-    def upscale(self):
-        pass
+        if self.simpl_img is None:
+            target_img = self.sketch_img # ImageOps.autocontrast(self.sketch_img, ignore=255)
+        else:
+            target_img = self.simpl_img
+        
+        try:
+            color_img = colorize.colorize(target_img, 
+                self.choice_box.get_selected(), 
+                gpu=self.use_gpu.get(),
+                is_old=True)
+            self.set_img(color_img)
+            w, h = color_img.size
+            self.print_status(f'Finished Colorization: ({w}x{h})')
+        except Exception as e:
+            traceback.print_exc()
+            self.print_error('Failed to colorize sketch. ' + e.with_traceback)
+
+    def upscale_img(self):
+        if self.current_img is None:
+            self.print_error('Please Load Image')
+            return
+        
+        gpu = self.use_gpu.get()
+
+        try:
+            upscaled_img = upscale(self.current_img, gpu)
+            w, h = upscaled_img.size
+            self.print_status(f'Finished Upscaling: ({w}x{h})')
+            self.set_img(upscaled_img)
+        except Exception as e:
+            traceback.print_exc()
+            self.print_error('Failed to colorize sketch. Try CPU version')
 
 
 if __name__ == '__main__':
-    args = parse_args()
-
-    simplify.set_model_path(args.simplify_dump)
-
-    app = App(args)
+    app = App()
     app.top.mainloop()
