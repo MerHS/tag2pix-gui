@@ -1,162 +1,23 @@
-# original code : https://github.com/yu45020/Waifu2x
-import os, json, warnings, copy, glob
-from collections import OrderedDict
-from contextlib import contextmanager
-from math import sqrt, exp, log
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
-from torchvision.transforms.functional import to_tensor
-from multiprocessing.dummy import Pool as ThreadPool
+import os
+from pathlib import Path
 from PIL import Image
 
-from models import *
+W2X_ROOT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'waifu2x-caffe')
 
-class ImageSplitter:
-    # key points:
-    # Boarder padding and over-lapping img splitting to avoid the instability of edge value
-    # Thanks Waifu2x's autorh nagadomi for suggestions (https://github.com/nagadomi/waifu2x/issues/238)
+w2x_path = Path(W2X_ROOT)
+w2x_exe = w2x_path / 'waifu2x-caffe-cui.exe'
+temp_path = w2x_path / 'temp'
 
-    def __init__(self, seg_size=48, scale_factor=2, boarder_pad_size=3):
-        self.seg_size = seg_size
-        self.scale_factor = scale_factor
-        self.pad_size = boarder_pad_size
-        self.height = 0
-        self.width = 0
-        self.upsampler = nn.Upsample(scale_factor=scale_factor, mode='bilinear')
+temp_path.mkdir(exist_ok=True)
 
-    def split_img_tensor(self, pil_img, scale_method=Image.BILINEAR, img_pad=0):
-        # resize image and convert them into tensor
-        img_tensor = to_tensor(pil_img).unsqueeze(0)
-        img_tensor = nn.ReplicationPad2d(self.pad_size)(img_tensor)
-        batch, channel, height, width = img_tensor.size()
-        self.height = height
-        self.width = width
+def upscale(img, gpu, height):
+    in_path = str(temp_path / 'temp.png')
+    out_path = str(temp_path / 'upscale.png')
 
-        if scale_method is not None:
-            img_up = pil_img.resize((2 * pil_img.size[0], 2 * pil_img.size[1]), scale_method)
-            img_up = to_tensor(img_up).unsqueeze(0)
-            img_up = nn.ReplicationPad2d(self.pad_size * self.scale_factor)(img_up)
+    img.save(in_path)
 
-        patch_box = []
-        # avoid the residual part is smaller than the padded size
-        if height % self.seg_size < self.pad_size or width % self.seg_size < self.pad_size:
-            self.seg_size += self.scale_factor * self.pad_size
+    g_opt = '-p gpu' if gpu else '-p cpu'
+    h_opt = f'-h {height}'
+    os.system(f'{str(w2x_exe)} -i {in_path} {g_opt} {h_opt} -o {out_path}')
 
-        # split image into over-lapping pieces
-        for i in range(self.pad_size, height, self.seg_size):
-            for j in range(self.pad_size, width, self.seg_size):
-                part = img_tensor[:, :,
-                       (i - self.pad_size):min(i + self.pad_size + self.seg_size, height),
-                       (j - self.pad_size):min(j + self.pad_size + self.seg_size, width)]
-                if img_pad > 0:
-                    part = nn.ZeroPad2d(img_pad)(part)
-                if scale_method is not None:
-                    # part_up = self.upsampler(part)
-                    part_up = img_up[:, :,
-                              self.scale_factor * (i - self.pad_size):min(i + self.pad_size + self.seg_size,
-                                                                          height) * self.scale_factor,
-                              self.scale_factor * (j - self.pad_size):min(j + self.pad_size + self.seg_size,
-                                                                          width) * self.scale_factor]
-
-                    patch_box.append((part, part_up))
-                else:
-                    patch_box.append(part)
-        return patch_box
-
-    def merge_img_tensor(self, list_img_tensor):
-        out = torch.zeros((1, 3, self.height * self.scale_factor, self.width * self.scale_factor))
-        img_tensors = copy.copy(list_img_tensor)
-        rem = self.pad_size * 2
-
-        pad_size = self.scale_factor * self.pad_size
-        seg_size = self.scale_factor * self.seg_size
-        height = self.scale_factor * self.height
-        width = self.scale_factor * self.width
-        for i in range(pad_size, height, seg_size):
-            for j in range(pad_size, width, seg_size):
-                part = img_tensors.pop(0)
-                part = part[:, :, rem:-rem, rem:-rem]
-                # might have error
-                if len(part.size()) > 3:
-                    _, _, p_h, p_w = part.size()
-                    out[:, :, i:i + p_h, j:j + p_w] = part
-                # out[:,:,
-                # self.scale_factor*i:self.scale_factor*i+p_h,
-                # self.scale_factor*j:self.scale_factor*j+p_w] = part
-        out = out[:, :, rem:-rem, rem:-rem]
-        return out
-
-
-def load_single_image(img_file,
-                      up_scale=False,
-                      up_scale_factor=2,
-                      up_scale_method=Image.BILINEAR,
-                      zero_padding=False):
-    img = Image.open(img_file).convert("RGB")
-    out = to_tensor(img).unsqueeze(0)
-    if zero_padding:
-        out = nn.ZeroPad2d(zero_padding)(out)
-    if up_scale:
-        size = tuple(map(lambda x: x * up_scale_factor, img.size))
-        img_up = img.resize(size, up_scale_method)
-        img_up = to_tensor(img_up).unsqueeze(0)
-        out = (out, img_up)
-
-    return out
-
-
-def standardize_img_format(img_folder):
-    def process(img_file):
-        img_path = os.path.dirname(img_file)
-        img_name, _ = os.path.basename(img_file).split(".")
-        out = os.path.join(img_path, img_name + ".JPEG")
-        os.rename(img_file, out)
-
-    list_imgs = []
-    for i in ['png', "jpeg", 'jpg']:
-        list_imgs.extend(glob.glob(img_folder + "**/*." + i, recursive=True))
-    print("Found {} images.".format(len(list_imgs)))
-    pool = ThreadPool(4)
-    pool.map(process, list_imgs)
-    pool.close()
-    pool.join()
-
-
-model_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'waifu.pth')
-
-def upscale(img, gpu):
-    model = DCSCN(color_channel=3,
-                up_scale=2,
-                feature_layers=12,
-                first_feature_filters=196,
-                last_feature_filters=48,
-                reconstruction_filters=128,
-                up_sampler_filters=32)
-    
-    model.eval()
-
-    map_location = "cuda:0" if gpu else "cpu"
-    cp = torch.load(model_path, map_location=map_location).state_dict()
-    model.load_state_dict(cp)
-
-    img = img.convert("RGB")
-    img_up = img.resize((2 * img.size[0], 2 * img.size[1]), Image.BILINEAR)
-    img = to_tensor(img).unsqueeze(0)
-    img_up = to_tensor(img_up).unsqueeze(0)
-
-    if gpu:
-        model = model.cuda()
-        img = img.cuda()
-        img_up = img_up.cuda()
-
-    with torch.no_grad():
-        out = model((img, img_up))
-        out = out.cpu()[0] * 255
-
-    if gpu:
-        model = None
-        torch.cuda.empty_cache()
-    out = out.permute(1, 2, 0)
-    return Image.fromarray(out.numpy().astype(np.uint8))
+    return Image.open(out_path).convert('RGB')

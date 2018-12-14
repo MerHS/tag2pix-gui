@@ -3,6 +3,7 @@ import tkinter as tk
 import torch
 import simplify
 import colorize
+import platform
 from upscale import upscale
 from PIL import ImageTk, Image, ImageOps
 from tkinter.filedialog import askopenfilename, asksaveasfilename
@@ -66,13 +67,16 @@ class App(object):
         self.simplify_sizes = [32, 64, 128, 256, 512, 768, 1024]
         self.simpl_var = tk.IntVar()
         self.use_gpu = tk.BooleanVar()
+        self.use_old = tk.BooleanVar()
 
         self.btn_load = tk.Button(self.top, text='Load Sketch', command=self.load_file)
         self.btn_simplify = tk.Button(self.top, text='Simplify Sketch', command=self.simplify_sketch)
         self.btn_colorize = tk.Button(self.top, text='Colorize', command=self.colorize_sketch)
         self.btn_upscale = tk.Button(self.top, text='Upscale', command=self.upscale_img)
         self.btn_save = tk.Button(self.top, text='Save', command=self.save_file)
-        self.cb_gpu = tk.Checkbutton(self.top, text='GPU | Simpify Size: ', variable=self.use_gpu)
+        self.cb_old = tk.Checkbutton(self.top, text='Old Ver ', variable=self.use_old)
+        self.cb_old.var = self.use_old
+        self.cb_gpu = tk.Checkbutton(self.top, text='GPU | Output Size: ', variable=self.use_gpu)
         self.cb_gpu.var = self.use_gpu
         self.drop_simpl_size = tk.OptionMenu(self.top, self.simpl_var, *self.simplify_sizes)
 
@@ -81,18 +85,26 @@ class App(object):
         self.btn_colorize.grid(row=0, column=2, sticky="nesw")
         self.btn_upscale.grid(row=0, column=3, sticky="nesw")
         self.btn_save.grid(row=0, column=4, sticky="nesw")
-        self.cb_gpu.grid(row=0, column=5, sticky="nesw")
-        self.drop_simpl_size.grid(row=0, column=6, ipadx=3, sticky="ew")
+        self.cb_old.grid(row=0, column=5, sticky="nesw")
+        self.cb_gpu.grid(row=0, column=6, sticky="nesw")
+        self.drop_simpl_size.grid(row=0, column=7, ipadx=3, sticky="ew")
         self.drop_simpl_size.config(width=5)
 
-        self.stat_text.grid(row=1, column=0, columnspan=7, sticky="nesw")
+        self.stat_text.grid(row=1, column=0, columnspan=8, sticky="nesw")
         
-        self.img_panel.grid(row=2, column=0, columnspan=5, sticky="nsw")
+        self.img_panel.grid(row=2, column=0, columnspan=6, sticky="nsw")
         self.img_label.pack()
 
-        self.choice_box.grid(row=2, column=5, columnspan=2, sticky="nse")
+        self.choice_box.grid(row=2, column=6, columnspan=2, sticky="nse")
 
         self.simpl_var.set(768)
+
+        self.print_status('Please Load Sketch File')
+        self.print_status('This version uses CPU to simplify sketch.')
+
+        if platform.system() != 'Windows':
+            self.print_error('Cannot use Upscaling (Windows only)')
+            self.btn_upscale.configure(state='disabled')
 
         if CUDA_AVAILABLE:
             self.use_gpu.set(True)
@@ -101,10 +113,9 @@ class App(object):
         else:
             self.use_gpu.set(False)
             self.cb_gpu.configure(state='disabled')
-            self.print_status('Failed to find CUDA GPU, run in cpu mode')
+            self.print_error('Failed to find CUDA GPU, run in cpu mode')
 
-        self.print_status('Please Load Sketch File')
-        self.print_status('This version uses CPU to simplify sketch.')
+        self.use_old.set(True)
 
     def print_log(self, status):
         self.stat_text.configure(state='normal')
@@ -127,7 +138,7 @@ class App(object):
     def load_file(self):
         file_name = askopenfilename()
         if os.path.exists(file_name):
-            self.sketch_img = Image.open(file_name)
+            self.sketch_img = Image.open(file_name).convert('RGB')
             self.simpl_img = None
             self.set_img(self.sketch_img)
             w, h = self.sketch_img.size
@@ -160,7 +171,7 @@ class App(object):
             self.print_error('Please Load Sketch Image')
             return
 
-        self.print_status('Simplifying Sketch... (Recommended Generated Size: 768px)')
+        self.print_status('Simplifying Sketch... (Recommended Output Size: 768px)')
         
         try:
             self.simpl_img = simplify.simplify_sketch(
@@ -170,7 +181,7 @@ class App(object):
             self.print_status(f'Finished Simplifying: ({w}x{h})')
         except:
             traceback.print_exc()
-            self.print_error('Failed to simplify sketch. See stack trace.')
+            self.print_error('Failed to simplify sketch. Check stack trace.')
             # self.print_error('Failed to simplify sketch. This may be your GPU VRAM size is smaller than network size. Retry with lower Partition Size')
 
     def colorize_sketch(self):
@@ -178,8 +189,9 @@ class App(object):
             self.print_error('Please Load Sketch Image')
             return
         gpu = self.use_gpu.get()
+        is_old = self.use_old.get()
         enable_str = 'enabled' if gpu else 'disabled'
-        self.print_status(f'Colorize with old version / GPU {enable_str}')
+        self.print_status(f'Colorize with {"old" if is_old else "new"} version / GPU {enable_str}')
 
         if self.simpl_img is None:
             target_img = self.sketch_img # ImageOps.autocontrast(self.sketch_img, ignore=255)
@@ -190,13 +202,13 @@ class App(object):
             color_img = colorize.colorize(target_img, 
                 self.choice_box.get_selected(), 
                 gpu=self.use_gpu.get(),
-                is_old=True)
+                is_old=is_old)
             self.set_img(color_img)
             w, h = color_img.size
             self.print_status(f'Finished Colorization: ({w}x{h})')
         except Exception as e:
             traceback.print_exc()
-            self.print_error('Failed to colorize sketch. ' + e.with_traceback)
+            self.print_error('Failed to colorize sketch. Check stack trace')
 
     def upscale_img(self):
         if self.current_img is None:
@@ -204,15 +216,17 @@ class App(object):
             return
         
         gpu = self.use_gpu.get()
+        height = self.simpl_var.get()
+        self.print_status(f'Rescale current image to {height}px')
 
         try:
-            upscaled_img = upscale(self.current_img, gpu)
+            upscaled_img = upscale(self.current_img, gpu, height)
             w, h = upscaled_img.size
             self.print_status(f'Finished Upscaling: ({w}x{h})')
             self.set_img(upscaled_img)
         except Exception as e:
             traceback.print_exc()
-            self.print_error('Failed to colorize sketch. Try CPU version')
+            self.print_error('Failed to upscale sketch. Check stack trace.')
 
 
 if __name__ == '__main__':

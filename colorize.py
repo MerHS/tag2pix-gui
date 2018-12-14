@@ -47,6 +47,7 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
     tag_dump = NEW_TAG_FILE_PATH # OLD_TAG_FILE_PATH if is_old else NEW_TAG_FILE_PATH
     network_dump = OLD_NETWORK_FILE_PATH if is_old else NEW_NETWORK_FILE_PATH
 
+    sketch = sketch.convert('L')
     iv_dict, cv_dict, name_to_id = get_tag_dict(tag_dump)
 
     color_variant_class_num = len(cv_dict.keys())
@@ -61,11 +62,14 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
         diff_half = diff // 2
         pad = (diff - diff_half, 0, diff_half, 0)
 
+    aug_mean, aug_std = (0.9184, 0.1477) if is_old else (0.9274, 0.1638)
+    resizer = transforms.Resize((input_size, input_size)) if is_old else transforms.Resize((input_size, input_size), interpolation=Image.LANCZOS)
+
     sketch_aug = transforms.Compose([
                     transforms.Pad(pad, padding_mode='reflect'),
-                    transforms.Resize((input_size, input_size), interpolation=Image.LANCZOS), 
+                    resizer, 
                     transforms.ToTensor(),
-                    transforms.Normalize(mean=[0.9274], std=[0.1638])])
+                    transforms.Normalize(mean=[aug_mean], std=[aug_std])])
 
     map_location = "cuda:0" if gpu else "cpu"
     device = torch.device(map_location)
@@ -111,6 +115,9 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
     img_col = None
     with torch.no_grad():
         sketch_ = sketch_aug(sketch).unsqueeze(0)
+        if gpu:
+            sketch_ = sketch_.to(device)
+
         feature_tensor = Pretrain_ResNeXT(sketch_) 
         if gpu:
             feature_tensor = feature_tensor.to(device)

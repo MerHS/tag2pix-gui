@@ -5,3 +5,5 @@ __pycache__
 *.t7
 *.pkl
 *.pth
+temp/
+waifu2x-caffe
