@@ -4,22 +4,21 @@ import torch.nn as nn
 import math
 
 class Selayer(nn.Module):
-    def __init__(self, inplanes):
+    def __init__(self, channel, reduction=16):
         super(Selayer, self).__init__()
-        self.global_avgpool = nn.AdaptiveAvgPool2d(1)
-        self.conv1 = nn.Conv2d(inplanes, inplanes // 16, kernel_size=1, stride=1)
-        self.conv2 = nn.Conv2d(inplanes // 16, inplanes, kernel_size=1, stride=1)
-        self.relu = nn.ReLU(inplace=True)
-        self.sigmoid = nn.Sigmoid()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
 
     def forward(self, x):
-        out = self.global_avgpool(x)
-        out = self.conv1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.sigmoid(out)
-
-        return x * out
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
 
 class BottleneckX(nn.Module):
     expansion = 4
@@ -88,14 +87,14 @@ class SEResNeXt(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-                if m.bias is not None:
-                    m.bias.data.zero_()
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-
+                nn.init.constant_(m.weight, 1)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+                
     def _make_layer(self, block, planes, blocks, stride=1, inplanes=None):
         downsample = None
 

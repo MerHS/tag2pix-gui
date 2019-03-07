@@ -31,7 +31,7 @@ def simplify_sketch(pil_img, max_pixel=768, partition=256, padding=16, gpu=False
    if pw != 0 or ph != 0:
       data = F.pad(data, (0, pw, 0, ph), mode='reflect').data
    
-   simp_arr = _simplify_part(data, cache, gpu)
+   simp_arr = _simplify_part(data, model, gpu)
 
    cache = None
    model = None
@@ -41,12 +41,12 @@ def simplify_sketch(pil_img, max_pixel=768, partition=256, padding=16, gpu=False
    simp_arr = simp_arr[0][:h, :w] * 255
    return Image.fromarray(simp_arr.numpy().astype(np.uint8))
 
-def _simplify_part(img_arr, cache, gpu=False):
-   model  = cache.model
-
-   if gpu:
-      pred = model.forward(img_arr.cuda()).float().cpu()
-   else:
-      pred = model.forward(img_arr)
+def _simplify_part(img_arr, model, gpu=False):
+   
+   with torch.no_grad():
+      if gpu:
+         pred = model.forward(img_arr.cuda()).float().cpu()
+      else:
+         pred = model.forward(img_arr)
 
    return pred[0]

@@ -18,12 +18,13 @@ from model.se_resnet import BottleneckX, SEResNeXt
 from model.pretrained import se_resnext_half
 from loader.dataloader import ColorSpace2RGB
 
-OLD_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag_dump_old.pkl')
-OLD_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag2pix_old.pkl')
-NEW_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag_dump_new.pkl')
-NEW_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag2pix_new.pkl')
+OLD_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump_old.pkl')
+OLD_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_old.pkl')
 
-PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pretrain_skt.pth')
+NEW_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump.pkl')
+NEW_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix.pkl')
+
+PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'pretrain.pth')
 
 def get_tag_dict(tag_dump_path):
     cv_dict = dict()
@@ -62,14 +63,12 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
         diff_half = diff // 2
         pad = (diff - diff_half, 0, diff_half, 0)
 
-    aug_mean, aug_std = (0.9184, 0.1477) if is_old else (0.9274, 0.1638)
     resizer = transforms.Resize((input_size, input_size)) if is_old else transforms.Resize((input_size, input_size), interpolation=Image.LANCZOS)
 
     sketch_aug = transforms.Compose([
                     transforms.Pad(pad, padding_mode='reflect'),
                     resizer, 
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=[aug_mean], std=[aug_std])])
+                    transforms.ToTensor()])
 
     map_location = "cuda:0" if gpu else "cpu"
     device = torch.device(map_location)
@@ -77,8 +76,7 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
     Pretrain_ResNeXT = se_resnext_half(
         dump_path=PRETRAIN_PATH, 
         num_classes=color_invariant_class_num, 
-        input_channels=1,
-        map_location=map_location)
+        input_channels=1)
     Gen = Generator(1, output_dim=3, input_size=input_size,
         cv_class_num=color_variant_class_num, 
         iv_class_num=color_invariant_class_num, 

@@ -1,7 +1,26 @@
 import torch
 import torch.nn as nn
 import math
-from .se_resnet import Selayer
+
+# Pretrained version
+class Selayer(nn.Module):
+    def __init__(self, inplanes):
+        super(Selayer, self).__init__()
+        self.global_avgpool = nn.AdaptiveAvgPool2d(1)
+        self.conv1 = nn.Conv2d(inplanes, inplanes // 16, kernel_size=1, stride=1)
+        self.conv2 = nn.Conv2d(inplanes // 16, inplanes, kernel_size=1, stride=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        out = self.global_avgpool(x)
+        out = self.conv1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.sigmoid(out)
+
+        return x * out
+
 
 class BottleneckX_Origin(nn.Module):
     expansion = 4
@@ -143,12 +162,11 @@ def load_weight(model, pretrained_dict):
     model_dict.update(pretrained_dict) 
     model.load_state_dict(pretrained_dict)
 
-def se_resnext_half(dump_path, map_location=None, **kwargs):
+def se_resnext_half(dump_path, **kwargs):
     model = SEResNeXt_Half(BottleneckX_Origin, [3, 4, 6, 3], **kwargs)
     with open(dump_path, 'rb') as f:
-        network_weight = torch.load(f, map_location=map_location)['weight']
+        network_weight = torch.load(f)['weight']
         load_weight(model, network_weight)
         model.remove_half()
 
     return model
-    

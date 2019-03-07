@@ -2,6 +2,7 @@ import argparse, os, traceback
 import tkinter as tk
 import torch
 import simplify
+import deblur
 import colorize
 import platform
 from upscale import upscale
@@ -70,7 +71,7 @@ class App(object):
         self.use_old = tk.BooleanVar()
 
         self.btn_load = tk.Button(self.top, text='Load Sketch', command=self.load_file)
-        self.btn_simplify = tk.Button(self.top, text='Simplify Sketch', command=self.simplify_sketch)
+        self.btn_simplify = tk.Button(self.top, text='Superpixel', command=self.simplify_sketch)
         self.btn_colorize = tk.Button(self.top, text='Colorize', command=self.colorize_sketch)
         self.btn_upscale = tk.Button(self.top, text='Upscale', command=self.upscale_img)
         self.btn_save = tk.Button(self.top, text='Save', command=self.save_file)
@@ -81,8 +82,8 @@ class App(object):
         self.drop_simpl_size = tk.OptionMenu(self.top, self.simpl_var, *self.simplify_sizes)
 
         self.btn_load.grid(row=0, column=0, sticky="nesw")
-        self.btn_simplify.grid(row=0, column=1, sticky="nesw")
-        self.btn_colorize.grid(row=0, column=2, sticky="nesw")
+        self.btn_colorize.grid(row=0, column=1, sticky="nesw")
+        self.btn_simplify.grid(row=0, column=2, sticky="nesw")
         self.btn_upscale.grid(row=0, column=3, sticky="nesw")
         self.btn_save.grid(row=0, column=4, sticky="nesw")
         self.cb_old.grid(row=0, column=5, sticky="nesw")
@@ -115,7 +116,7 @@ class App(object):
             self.cb_gpu.configure(state='disabled')
             self.print_error('Failed to find CUDA GPU, run in cpu mode')
 
-        self.use_old.set(True)
+        self.use_old.set(False)
 
     def print_log(self, status):
         self.stat_text.configure(state='normal')
@@ -174,8 +175,11 @@ class App(object):
         self.print_status('Simplifying Sketch... (Recommended Output Size: 768px)')
         
         try:
-            self.simpl_img = simplify.simplify_sketch(
-                self.sketch_img, self.simpl_var.get(), gpu=False) # self.use_gpu.get())
+            self.simpl_img = deblur.superpool_img(
+                self.current_img, self.sketch_img
+            )
+            # self.simpl_img = simplify.simplify_sketch(
+            #     self.sketch_img, self.simpl_var.get(), self.use_gpu.get())
             self.set_img(self.simpl_img)
             w, h = self.simpl_img.size
             self.print_status(f'Finished Simplifying: ({w}x{h})')
