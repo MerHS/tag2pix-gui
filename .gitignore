@@ -9,3 +9,4 @@ temp/
 waifu2x-caffe
 test-images
 network_dump/deblur.model*
+network_dump

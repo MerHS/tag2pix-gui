@@ -214,6 +214,24 @@ class App(object):
             traceback.print_exc()
             self.print_error('Failed to colorize sketch. Check stack trace')
 
+    # def upscale_img(self):
+    #     if self.current_img is None:
+    #         self.print_error('Please Load Image')
+    #         return
+        
+    #     gpu = self.use_gpu.get()
+    #     height = self.simpl_var.get()
+    #     self.print_status(f'Rescale current image to {height}px')
+
+    #     try:
+    #         upscaled_img = upscale(self.current_img, gpu, height)
+    #         w, h = upscaled_img.size
+    #         self.print_status(f'Finished Upscaling: ({w}x{h})')
+    #         self.set_img(upscaled_img)
+    #     except Exception as e:
+    #         traceback.print_exc()
+    #         self.print_error('Failed to upscale sketch. Check stack trace.')
+
     def upscale_img(self):
         if self.current_img is None:
             self.print_error('Please Load Image')
@@ -221,17 +239,16 @@ class App(object):
         
         gpu = self.use_gpu.get()
         height = self.simpl_var.get()
-        self.print_status(f'Rescale current image to {height}px')
+        self.print_status(f'Deblur current image to {height}px')
 
         try:
-            upscaled_img = upscale(self.current_img, gpu, height)
+            upscaled_img = deblur.deblur(self.current_img, gpu)
             w, h = upscaled_img.size
-            self.print_status(f'Finished Upscaling: ({w}x{h})')
+            self.print_status(f'Finished Deblurring: ({w}x{h})')
             self.set_img(upscaled_img)
         except Exception as e:
             traceback.print_exc()
-            self.print_error('Failed to upscale sketch. Check stack trace.')
-
+            self.print_error('Failed to deblur sketch. Check stack trace.')
 
 if __name__ == '__main__':
     app = App()

@@ -58,15 +58,40 @@ class DeblurArgs():
         self.model = 'color'
         self.epoch = 1
         self.lr = 1e-4
-        self.gpu = 0 if use_gpu else -1
+        self.gpu = str(0 if use_gpu else -1)
         self.height = 256
         self.width = 256
 
-def deblur(img, use_gpu, test_dir):
-    '''img: cv2 image / return cv2 img (scipy.misc.im)'''
+def deblur(img, use_gpu=True):
+    '''img: PIL Image / return PIL Image'''
+    img = np.array(img)
+    img = np.roll(img, -1, axis=-1)
 
     args = DeblurArgs(use_gpu)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     deblur = DEBLUR(args)
 
-    return deblur.test(img, 256, 256)
+    deblurred = deblur.test(img, 256, 256)
+
+    return Image.fromarray(np.roll(deblurred, 1, axis=-1))
+
+def deblur_batch(img_list, use_gpu=True):
+    '''img: PIL Image python list / return PIL Image python list'''
+    
+    batch_img = []
+    for img in img_list:
+        img = np.roll(img, -1, axis=-1)
+        batch_img.append(img)
+    img = np.array(batch_img)
+
+    args = DeblurArgs(use_gpu)
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    deblur = DEBLUR(args)
+
+    deblurred = deblur.test(img, 256, 256)
+
+    result_img = []
+    for img in deblurred:
+        result_img.append(Image.fromarray(np.roll(deblurred, 1, axis=-1)))
+    
+    return result_img

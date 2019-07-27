@@ -11,6 +11,7 @@ from datetime import datetime
 from .util.util import *
 from .util.BasicConvLSTMCell import *
 
+object_cache = None
 
 class DEBLUR(object):
     def __init__(self, args):
@@ -21,16 +22,8 @@ class DEBLUR(object):
 
         # if args.phase == 'train':
         self.crop_size = 256
-        self.data_list = open(args.datalist, 'rt').read().splitlines()
-        self.data_list = list(map(lambda x: x.split(' '), self.data_list))
-        random.shuffle(self.data_list)
         self.train_dir = os.path.join('./network_dump')
-
         self.batch_size = args.batch_size
-        self.epoch = args.epoch
-        self.data_size = (len(self.data_list)) // self.batch_size
-        self.max_steps = int(self.epoch * self.data_size)
-        self.learning_rate = args.learning_rate
 
     def input_producer(self, batch_size=10):
         def read_data():
@@ -247,17 +240,28 @@ class DEBLUR(object):
         else:
             return False
 
+    def get_session(self):
+        global object_cache
+        if object_cache is None:
+            sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
+            self.saver = tf.train.Saver()
+            self.load(sess, self.train_dir, step=523000)
+            object_cache = sess
+        else:
+            sess = object_cache
+        
+        return sess
+
     def test(self, img, height, width):
+        
+
         H, W = height, width
         inp_chns = 3
-        self.batch_size = 1
         inputs = tf.placeholder(shape=[self.batch_size, H, W, inp_chns], dtype=tf.float32)
-        outputs = self.generator(inputs, reuse=False)
-
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
-
-        self.saver = tf.train.Saver()
-        self.load(sess, self.train_dir, step=523000)
+        outputs = self.generator(inputs, reuse=tf.AUTO_REUSE)
+        self.batch_size = 1
+        
+        sess = self.get_session()
 
         blur = img
         h, w, c = blur.shape
