@@ -1,25 +1,31 @@
-```python main.py```
+# Tag2Pix: Line Art Colorization using Text Tag with SECat and Changing Loss (ICCV 19')
 
-# Dependencies
+## How to Run
+
+1. Download Network Dumps from [tag2pix repo releases](https://github.com/MerHS/tag2pix)
+2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (wafu2x-caffe.exe should be in this directory)
+2. Install Dependencies
+3. `python main.py`
+
+## Dependencies
+
 * Python 3.6+
-* Pytorch 0.4
+* Pytorch 1.1.0
 * numpy
 * Pillow
 * scikit-image
 
-# How to Colorize 
+## Usage 
 
-1. Load Sketch -> 스케치 로드
-2. Simplify Sketch -> 스케치 단순화 (생략 가능 / 바로 colorize 가능함)
-    * 우상단의 Generated Size에서 단순화 출력물의 사이즈를 설정할 수 있습니다. (권장: 768)
-    * New version은 Simplify Sketch를 적용한 스케치에 최적화 되어 있습니다.
-3. 우측의 태그 리스트중에 원하는 것들을 다중 선택
-4. Colorize -> 채색 진행 (출력: 256x256)
-5. Upscale -> (Windows 전용) waifu2x-caffe를 이용하여 결과물 해상도 증강 (생략 가능)
-6. Save -> 파일 저장
+1. Load Sketch
+2. 우측의 태그 리스트중에 원하는 것들을 다중 선택
+3. Colorize -> 채색 진행 
+4. Upscale (Windows only) -> waifu2x-caffe를 이용하여 결과물 해상도 증강 (생략 가능)
+5. Save -> 파일 저장
 
 # LICENSE
 
-https://github.com/bobbens/sketch_simplification 의 model_gan.t7을 이용하여 sketch simplification을 진행하기 때문에 LICENSE 문제로 비상업적 내부 이용만 가능합니다.
+This program and network dumps can be used only for non-commercial, internal researches.
 
-upscaling엔 https://github.com/lltcggie/waifu2x-caffe 를 사용하였으며, windows에서밖에 작동하지 않기 때문에 upscaling은 windows에서만 작동합니다.
+If you want to use it for commercial purpose, re-train the full tag2pix network with the methods of our paper.
+(We cannot share exact train datasets due to the image licenses.)

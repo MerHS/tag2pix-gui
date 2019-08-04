@@ -143,4 +143,3 @@ def se_resnext50(**kwargs):
     """
     model = SEResNeXt(BottleneckX, [3, 4, 6, 3], **kwargs)
     return model
-

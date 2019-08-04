@@ -15,15 +15,16 @@ from PIL import Image
 
 from model.se_resnet import BottleneckX, SEResNeXt
 from model.pretrained import se_resnext_half
-from loader.dataloader import ColorSpace2RGB
+from model.network import Generator
 
-OLD_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump.pkl')
-OLD_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix.pkl')
-
-NEW_TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump.pkl')
-NEW_NETWORK_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_26_epoch.pkl')
-
+TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump.pkl')
+NETWORK_512_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_512.pkl')
+NETWORK_256_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_256.pkl')
 PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'pretrain.pth')
+
+gen_cache = None
+pret_cache = None
+curr_size = None
 
 def get_tag_dict(tag_dump_path):
     cv_dict = dict()
@@ -42,15 +43,44 @@ def get_tag_dict(tag_dump_path):
 
     return iv_dict, cv_dict, name_to_id
 
-gen_cache = None
-pret_cache = None
-curr_old = True
+class ColorSpace2RGB(object):
+    """
+    [-1, 1] to [0, 255]
+    """
+    def __init__(self, color_space):
+        self.color_space = color_space
 
-def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, layers=[12,8,5,5]):
-    global gen_cache, pret_cache, curr_old
+    def __call__(self, img):
+        """numpy array [b, [-1~1], [-1~1], [-1~1]] to target space / result rgb[0~255]"""
+        img = img.data.numpy()
 
-    tag_dump = OLD_TAG_FILE_PATH if is_old else NEW_TAG_FILE_PATH
-    network_dump = OLD_NETWORK_FILE_PATH if is_old else NEW_NETWORK_FILE_PATH
+        if self.color_space == 'rgb':
+            img = (img + 1) * 0.5
+
+        img = img.transpose(0, 2, 3, 1)
+        if self.color_space == 'lab': # to [0~100, -128~127, -128~127]
+            img[:,:,:,0] = (img[:,:,:,0] + 1) * 50
+            img[:,:,:,1] = (img[:,:,:,1] * 127.5) - 0.5
+            img[:,:,:,2] = (img[:,:,:,2] * 127.5) - 0.5
+            img_list = []
+            for i in img:
+                img_list.append(color.lab2rgb(i))
+            img = np.array(img_list)
+        elif self.color_space == 'hsv': # to [0~1, 0~1, 0~1]
+            img = (img + 1) * 0.5
+            img_list = []
+            for i in img:
+                img_list.append(color.hsv2rgb(i))
+            img = np.array(img_list)
+
+        img = (img * 255).astype(np.uint8)
+        return img # [0~255] / [b, h, w, 3]
+
+def colorize(sketch, color_tag_items, gpu=False, input_size=256, layers=[12,8,5,5]):
+    global gen_cache, pret_cache, curr_size
+
+    tag_dump = TAG_FILE_PATH
+    network_dump = NETWORK_256_PATH if input_size == 256 else NETWORK_512_PATH
 
     sketch = sketch.convert('L')
     iv_dict, cv_dict, name_to_id = get_tag_dict(tag_dump)
@@ -67,42 +97,51 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
         diff_half = diff // 2
         pad = (diff - diff_half, 0, diff_half, 0)
 
-    input_size = 256 if is_old else 512
-    resizer = transforms.Resize((input_size, input_size), interpolation=Image.LANCZOS)
-
     sketch_aug = transforms.Compose([
                     transforms.Pad(pad, padding_mode='reflect'),
-                    resizer, 
+                    transforms.Resize((input_size, input_size), interpolation=Image.LANCZOS), 
                     transforms.ToTensor()])
 
     map_location = "cuda:0" if gpu else "cpu"
     device = torch.device(map_location)
 
-    if is_old != curr_old:
-        if is_old:
-            from network import Generator
-        else:
-            from model.new_net import Generator
+    # Load network dump
+    if curr_size is not None and input_size != curr_size:
+        gen_cache = None
+        pret_cache = None
+        if gpu:
+            torch.cuda.empty_cache()
 
+    if pret_cache is None: 
         pret_cache = se_resnext_half(
             dump_path=PRETRAIN_PATH, 
             num_classes=color_invariant_class_num, 
             input_channels=1)
+            
+        pret_cache.eval()
+        if gpu:
+            pret_cache.to(device)
+    
+    
+    if curr_size is None or input_size != curr_size:
+        curr_size = input_size
+        
+        # TODO: find no_relu, no_bn from dump file
+        no_relu = True
+        no_bn = (input_size == 512) # current 512px version does not use bn layer
+        
         gen_cache = Generator(1, output_dim=3, input_size=input_size,
             cv_class_num=color_variant_class_num, 
             iv_class_num=color_invariant_class_num, 
-            layers=layers)
+            layers=layers, no_relu=no_relu, no_bn=no_bn)
     
-        pret_cache.eval()
         gen_cache.eval()
-
         if gpu:
-            pret_cache.to(device)
             gen_cache.to(device)
-
+    
         checkpoint = torch.load(network_dump, map_location=map_location)
         gen_state_dict = gen_cache.state_dict()
-        checkpoint_dict = checkpoint if is_old else checkpoint['G']
+        checkpoint_dict = checkpoint['G']
         checkpoint_dict = {k[7:]: v for k, v in checkpoint_dict.items() if k[7:] in gen_state_dict}
         gen_state_dict.update(checkpoint_dict)
         gen_cache.load_state_dict(checkpoint_dict)
@@ -111,11 +150,6 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
     if gpu:
         color_tag = color_tag.to(device)
     
-    # print(color_tag_items)
-    # print(cv_dict)
-    # id_to_name = {v: k for k, v in name_to_id.items()}
-    # for k, v in cv_dict.items():
-    #     print(id_to_name[k], k)
     for line in color_tag_items:
         l = line.strip()
         cv_id = name_to_id[l]
@@ -139,11 +173,7 @@ def colorize(sketch, color_tag_items, gpu=False, is_old=True, input_size=256, la
         G_col = color_revert(G_col)
         img_col = Image.fromarray(G_col[0]) 
 
-    # if gpu:
-    #     Gen = None
-    #     Pretrain_ResNeXT = None
-    #     torch.cuda.empty_cache()
-    
+
     if w > h:
         crop_pos = (0, math.ceil(input_size * (1 - (h / w))), input_size, input_size)
     else:
