@@ -1,4 +1,4 @@
-# Tag2Pix: Line Art Colorization using Text Tag with SECat and Changing Loss (ICCV 19')
+# Tag2Pix: Line Art Colorization Using Text Tag With SECat And Changing Loss (ICCV 19')
 
 Tag2Pix GUI Version
 
