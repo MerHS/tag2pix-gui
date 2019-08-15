@@ -20,7 +20,7 @@ def get_resized_img(pil_img, max_pixel=512, resample=Image.ANTIALIAS):
 
 def get_tagset():
     tag_list = []
-    with open('loader/tags.txt', 'r') as f:
+    with open('./tags.txt', 'r') as f:
         for line in f:
             tag_list.append(line.strip())
     return tag_list
@@ -108,8 +108,6 @@ class App(object):
             self.cb_gpu.configure(state='disabled')
             self.print_error('Failed to find CUDA GPU, run in cpu mode')
 
-        self.use_old.set(False)
-
     def print_log(self, status):
         self.stat_text.configure(state='normal')
         self.stat_text.insert(tk.END, status + '\n')
@@ -152,7 +150,7 @@ class App(object):
                     pass # TODO
                 self.current_img.save(file_name)
                 self.print_status(f'Image saved to "{file_name}"')
-            except Exception as e:
+            except Exception:
                 traceback.print_exc()
                 self.print_error(f'Failed to save image: "{file_name}"')
         else:
@@ -177,15 +175,15 @@ class App(object):
             self.set_img(color_img)
             w, h = color_img.size
             self.print_status(f'Colorized result: ({w}x{h})px')
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             self.print_error('Failed to colorize sketch. Check stack trace')
 
     def upscale_img(self):
         if self.current_img is None:
             self.print_error('Please Load Image')
-        return
-        
+            return
+
         gpu = self.use_gpu.get()
         height = self.upscale_var.get()
         self.print_status(f'Upscale current image to {height}px')
@@ -195,7 +193,7 @@ class App(object):
             w, h = upscaled_img.size
             self.print_status(f'Finished Upscaling: ({w}x{h})')
             self.set_img(upscaled_img)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             self.print_error('Failed to upscale sketch. Check stack trace.')
 

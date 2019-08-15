@@ -1,9 +1,15 @@
-import utils
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from model.se_resnet import BottleneckX, SEResNeXt
+
+DEFAULT_NET_OPT = {
+    'guide': True,
+    'relu': False,
+    'bn': True,
+    'cit': True
+}
 
 class MultiPrmSequential(nn.Sequential):
     def __init__(self, *args):
@@ -19,7 +25,7 @@ def make_secat_layer(block, inplanes, planes, cat_planes, block_count, stride=1,
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         if no_bn:
-            downsample = nn.Conv2d(inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False)
+            downsample = nn.Sequential(nn.Conv2d(inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False))
         else:
             downsample = nn.Sequential(
                 nn.Conv2d(inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
@@ -98,12 +104,14 @@ class SECatBottleneckX(nn.Module):
         return out
 
 class FeatureConv(nn.Module):
-    def __init__(self, input_dim=512, output_dim=256, input_size=32, output_size=16, no_bn=False):
+    def __init__(self, input_dim=512, output_dim=256, input_size=32, output_size=16, net_opt=DEFAULT_NET_OPT):
         super(FeatureConv, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.input_size = input_size
         self.output_size = output_size
+
+        no_bn = not net_opt['bn']
         
         if input_size == output_size * 4:
             stride1, stride2 = 2, 2
@@ -140,8 +148,7 @@ class DecoderBlock(nn.Module):
 
 class Generator(nn.Module):
     def __init__(self, input_size, cv_class_num, iv_class_num, input_dim=1, output_dim=3, 
-                 layers=[12, 8, 5, 5], no_relu=False, no_bn=False):
-
+                 layers=[12, 8, 5, 5], net_opt=DEFAULT_NET_OPT):
         super(Generator, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -157,19 +164,22 @@ class Generator(nn.Module):
         self.Linear = nn.Linear(cv_class_num, self.bottom_h*self.bottom_h*32)
 
         self.color_fc_out = 64
+        self.net_opt = net_opt
+
+        no_bn = not net_opt['bn']
         
-        if no_relu:
-            self.colorFC = nn.Sequential(
-                nn.Linear(cv_class_num, self.color_fc_out),
-                nn.Linear(self.color_fc_out, self.color_fc_out),
-                nn.Linear(self.color_fc_out, self.color_fc_out),
-                nn.Linear(self.color_fc_out, self.color_fc_out)
-            )
-        else:
+        if net_opt['relu']:
             self.colorFC = nn.Sequential(
                 nn.Linear(cv_class_num, self.color_fc_out), nn.ReLU(inplace=True),
                 nn.Linear(self.color_fc_out, self.color_fc_out), nn.ReLU(inplace=True),
                 nn.Linear(self.color_fc_out, self.color_fc_out), nn.ReLU(inplace=True),
+                nn.Linear(self.color_fc_out, self.color_fc_out)
+            )
+        else:
+            self.colorFC = nn.Sequential(
+                nn.Linear(cv_class_num, self.color_fc_out),
+                nn.Linear(self.color_fc_out, self.color_fc_out),
+                nn.Linear(self.color_fc_out, self.color_fc_out),
                 nn.Linear(self.color_fc_out, self.color_fc_out)
             )
 
@@ -179,7 +189,9 @@ class Generator(nn.Module):
         self.conv4 = self._make_encoder_block(64, 128)
         self.conv5 = self._make_encoder_block(128, 256)
         
-        self.deconv1 = DecoderBlock(256 + 256 + 64, 4*256, self.color_fc_out, self.layers[0], no_bn=no_bn)
+        bottom_layer_len = 256 + 64 + (256 if net_opt['cit'] else 0)
+
+        self.deconv1 = DecoderBlock(bottom_layer_len, 4*256, self.color_fc_out, self.layers[0], no_bn=no_bn)
         self.deconv2 = DecoderBlock(256 + 128, 4*128, self.color_fc_out, self.layers[1], no_bn=no_bn)
         self.deconv3 = DecoderBlock(128 + 64, 4*64, self.color_fc_out, self.layers[2], no_bn=no_bn)
         self.deconv4 = DecoderBlock(64 + 32, 4*32, self.color_fc_out, self.layers[3], no_bn=no_bn)
@@ -190,7 +202,8 @@ class Generator(nn.Module):
             nn.Tanh(),
         )
 
-        self.featureConv = FeatureConv(no_bn=no_bn)
+        if net_opt['cit']:
+            self.featureConv = FeatureConv(net_opt=net_opt)
 
         self.colorConv = nn.Sequential(
             nn.Conv2d(32, 64, 3, 1, 1),
@@ -201,16 +214,17 @@ class Generator(nn.Module):
             nn.Tanh(),
         )
 
-        self.deconv_for_decoder = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1), # output is 64 * 64
-            nn.LeakyReLU(0.2),
-            nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1), # output is 128 * 128
-            nn.LeakyReLU(0.2),
-            nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1), # output is 256 * 256
-            nn.LeakyReLU(0.2),
-            nn.ConvTranspose2d(32, 3, 3, stride=1, padding=1, output_padding=0), # output is 256 * 256
-            nn.Tanh(),
-        )
+        if net_opt['guide']:
+            self.deconv_for_decoder = nn.Sequential(
+                nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1), # output is 64 * 64
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1), # output is 128 * 128
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1), # output is 256 * 256
+                nn.LeakyReLU(0.2),
+                nn.ConvTranspose2d(32, 3, 3, stride=1, padding=1, output_padding=0), # output is 256 * 256
+                nn.Tanh(),
+            )
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -257,17 +271,16 @@ class Generator(nn.Module):
         # ==============================
         # Convolution Layer for Feature Tensor
 
-        feature_tensor = self.featureConv(feature_tensor)
-        concat_tensor = torch.cat([out5, feature_tensor, c_tag_tensor], 1)
-        # concat_tensor = torch.cat([concat_tensor, c_tag_tensor], 1)
+        if self.net_opt['cit']:
+            feature_tensor = self.featureConv(feature_tensor)
+            concat_tensor = torch.cat([out5, feature_tensor, c_tag_tensor], 1)
+        else:
+            concat_tensor = torch.cat([out5, c_tag_tensor], 1)
+
         out4_prime = self.deconv1(concat_tensor, c_se_tensor)
 
         # ==============================
-        # out4_prime should be input of Guide Decoder
-        
-        decoder_output = self.deconv_for_decoder(out4_prime)
-
-        # ==============================
+        # Deconv layers
 
         concat_tensor = torch.cat([out4_prime, out4], 1)
         out3_prime = self.deconv2(concat_tensor, c_se_tensor)
@@ -281,5 +294,12 @@ class Generator(nn.Module):
         concat_tensor = torch.cat([out1_prime, out1], 1)
         full_output = self.deconv5(concat_tensor)
 
-        return full_output, decoder_output
+        # ==============================
+        # out4_prime should be input of Guide Decoder
 
+        if self.net_opt['guide']:
+            decoder_output = self.deconv_for_decoder(out4_prime)
+        else:
+            decoder_output = full_output
+
+        return full_output, decoder_output

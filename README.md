@@ -1,11 +1,8 @@
 # Tag2Pix: Line Art Colorization using Text Tag with SECat and Changing Loss (ICCV 19')
 
-## How to Run
+Tag2Pix GUI Version
 
-1. Download Network Dumps from [tag2pix repo releases](https://github.com/MerHS/tag2pix)
-2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (wafu2x-caffe.exe should be in this directory)
-2. Install Dependencies
-3. `python main.py`
+![Test image](https://raw.githubusercontent.com/MerHS/tag2pix-gui/master/test.png)
 
 ## Dependencies
 
@@ -15,17 +12,30 @@
 * Pillow
 * scikit-image
 
+
+## How to Run
+
+1. Download every network dump from [Tag2Pix releases](https://github.com/blandocs/tag2pix/releases). Place those three dumps under the root tag2pix-gui directory.
+2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (wafu2x-caffe.exe should be in this directory)
+2. Install Dependencies
+3. `python main.py`
+
 ## Usage 
 
 1. Load Sketch
-2. 우측의 태그 리스트중에 원하는 것들을 다중 선택
-3. Colorize -> 채색 진행 
-4. Upscale (Windows only) -> waifu2x-caffe를 이용하여 결과물 해상도 증강 (생략 가능)
-5. Save -> 파일 저장
+2. Select tags you want to colorize. (We recommend to colorize with `white_background`)
+3. Press Colorize 
+4. Upscale (withwaifu2x-caffe) (Optional, Windows only)
+5. Save
 
 # LICENSE
 
-This program and network dumps can be used only for non-commercial, internal researches.
+This program and network dumps can be used for non-commercial, research purpose only.
+(Due to the [LICENSE](https://github.com/bobbens/sketch_simplification/blob/master/LICENSE) of Sketch Simplification.)
 
 If you want to use it for commercial purpose, re-train the full tag2pix network with the methods of our paper.
-(We cannot share exact train datasets due to the image licenses.)
+
+(The license of original non-GUI [Tag2Pix](https://github.com/blandocs/tag2pix) code is distributed under MIT License.)
+
+학습 데이터 및 사용 네트워크의 라이센스 문제로 인해, 본 리포지토리의 코드 및 네트워크 덤프 파일의 배포 및 사용과 파생 저작물 생산은 비상업적 이용 및 연구 목적으로만 이용할 수 있습니다. 
+

@@ -9,6 +9,7 @@ from torch.autograd import grad
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
+from skimage import color
 
 import numpy as np
 from PIL import Image
@@ -17,10 +18,10 @@ from model.se_resnet import BottleneckX, SEResNeXt
 from model.pretrained import se_resnext_half
 from model.network import Generator
 
-TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag_dump.pkl')
-NETWORK_512_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_512.pkl')
-NETWORK_256_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'tag2pix_256.pkl')
-PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'network_dump', 'pretrain.pth')
+TAG_FILE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag_dump.pkl')
+NETWORK_512_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag2pix_512.pkl')
+NETWORK_256_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tag2pix_256.pkl')
+PRETRAIN_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'model.pth')
 
 gen_cache = None
 pret_cache = None
@@ -126,14 +127,16 @@ def colorize(sketch, color_tag_items, gpu=False, input_size=256, layers=[12,8,5,
     if curr_size is None or input_size != curr_size:
         curr_size = input_size
         
-        # TODO: find no_relu, no_bn from dump file
-        no_relu = True
-        no_bn = (input_size == 512) # current 512px version does not use bn layer
-        
-        gen_cache = Generator(1, output_dim=3, input_size=input_size,
+        # currently, 512px version does not use bn layer
+        if input_size == 512:
+            net_opt = {'guide': True, 'relu': False, 'bn': False, 'cit': True}
+        else:
+            net_opt = {'guide': True, 'relu': False, 'bn': True, 'cit': True}
+
+        gen_cache = Generator(input_size=input_size, output_dim=3, 
             cv_class_num=color_variant_class_num, 
             iv_class_num=color_invariant_class_num, 
-            layers=layers, no_relu=no_relu, no_bn=no_bn)
+            net_opt=net_opt)
     
         gen_cache.eval()
         if gpu:
