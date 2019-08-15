@@ -2,7 +2,7 @@
 
 Tag2Pix GUI Version
 
-![Test image](https://raw.githubusercontent.com/MerHS/tag2pix-gui/master/test.png)
+![Test image](test.png)
 
 ## Dependencies
 
