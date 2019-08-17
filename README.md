@@ -37,5 +37,5 @@ If you want to use it for commercial purpose, re-train the full tag2pix network 
 
 (The license of original non-GUI [Tag2Pix](https://github.com/blandocs/tag2pix) code is distributed under MIT License.)
 
-학습 데이터 및 사용 네트워크의 라이센스 문제로 인해, 본 리포지토리의 코드 및 네트워크 덤프 파일의 배포 및 사용과 파생 저작물 생산은 비상업적 이용 및 연구 목적으로만 이용할 수 있습니다. 
+학습 데이터 및 사용 네트워크의 라이센스 문제로 인해, 본 리포지토리의 코드 및 네트워크 덤프 파일의 배포 및 사용과 채색 결과는 비상업적 이용 및 연구 목적으로만 이용할 수 있습니다. 
 
