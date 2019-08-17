@@ -16,7 +16,7 @@ Tag2Pix GUI Version
 ## How to Run
 
 1. Download every network dump from [Tag2Pix releases](https://github.com/blandocs/tag2pix/releases). Place those three dumps under the root tag2pix-gui directory.
-2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (wafu2x-caffe.exe should be in this directory)
+2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (waifu2x-caffe-cui.exe should be in this directory)
 2. Install Dependencies
 3. `python main.py`
 
@@ -25,7 +25,7 @@ Tag2Pix GUI Version
 1. Load Sketch
 2. Select tags you want to colorize. (We recommend to colorize with `white_background`)
 3. Press Colorize 
-4. Upscale (withwaifu2x-caffe) (Optional, Windows only)
+4. Upscale (with waifu2x-caffe) (Optional, Windows only)
 5. Save
 
 # LICENSE
