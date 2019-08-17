@@ -1,6 +1,6 @@
 # Tag2Pix: Line Art Colorization Using Text Tag With SECat And Changing Loss (ICCV 19')
 
-Tag2Pix GUI Version
+[Tag2Pix](https://github.com/blandocs/Tag2Pix) - GUI Version
 
 ![Test image](test.png)
 
