@@ -3,6 +3,8 @@
 [Tag2Pix](https://github.com/blandocs/Tag2Pix) - GUI Version
 
 ![Test image](test.png)
+(Test Illustration Copyright: [@MMM](https://twitter.com/dawn4ir))
+
 
 > **Tag2Pix: Line Art Colorization Using Text Tag With SECat and Changing Loss**<br>
 > Hyunsu Kim∗, Ho Young Jhoo∗, Eunhyeok Park, and Sungjoo Yoo (\* equal contribution)<br> 
