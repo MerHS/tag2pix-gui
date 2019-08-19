@@ -4,7 +4,7 @@
 
 ![Test image](test.png)
 
-(Test Illustration Copyright: [@MMM](https://twitter.com/dawn4ir))
+(Test Illustration Copyright: [MMM](https://twitter.com/dawn4ir))
 
 
 > **Tag2Pix: Line Art Colorization Using Text Tag With SECat and Changing Loss**<br>
