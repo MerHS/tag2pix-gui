@@ -26,9 +26,9 @@
 ## How to Run
 
 1. Download every network dump from [Tag2Pix releases](https://github.com/blandocs/tag2pix/releases). Place those dumps (Pretrained CIT Net / Tag2Pix Generator) under the root tag2pix-gui directory.
-2. (Optional) Download [waifu2x-caffe](https://example.org) and place it to waifu2x-caffe directory. (waifu2x-caffe-cui.exe should be in this directory)
-2. Install Dependencies
-3. `python main.py`
+2. (Optional) Download [waifu2x-caffe.zip](https://github.com/lltcggie/waifu2x-caffe/releases). Unzip and place unzipped files in `waifu2x-caffe` directory. (waifu2x-caffe-cui.exe should be in that directory)
+3. Install Dependencies
+4. `python main.py`
 
 ## Usage 
 
