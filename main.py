@@ -190,6 +190,8 @@ class App(object):
 
         try:
             upscaled_img = upscale(self.current_img, gpu, height)
+            if type(upscaled_img) == str:
+                self.print_error('Failed to find waifu2x-caffe.')
             w, h = upscaled_img.size
             self.print_status(f'Finished Upscaling: ({w}x{h})')
             self.set_img(upscaled_img)

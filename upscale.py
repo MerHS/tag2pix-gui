@@ -8,9 +8,11 @@ w2x_path = Path(W2X_ROOT)
 w2x_exe = w2x_path / 'waifu2x-caffe-cui.exe'
 temp_path = w2x_path / 'temp'
 
-temp_path.mkdir(exist_ok=True)
 
 def upscale(img, gpu, height):
+    if not w2x_path.exists() and not w2x_exe.exists():
+        return "waifu does not exists."
+
     in_path = str(temp_path / 'temp.png')
     out_path = str(temp_path / 'upscale.png')
 
