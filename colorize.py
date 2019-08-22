@@ -115,6 +115,7 @@ def colorize(sketch, color_tag_items, gpu=False, input_size=256, layers=[12,8,5,
 
     if pret_cache is None: 
         pret_cache = se_resnext_half(
+            gpu=gpu,
             dump_path=PRETRAIN_PATH, 
             num_classes=color_invariant_class_num, 
             input_channels=1)
