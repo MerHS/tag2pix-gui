@@ -17,7 +17,7 @@
 ## Dependencies
 
 * Python 3.6+
-* Pytorch 1.1.0
+* Pytorch 1.1.0 / torchvision
 * numpy
 * Pillow
 * scikit-image
